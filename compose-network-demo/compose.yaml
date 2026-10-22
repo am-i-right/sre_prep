@@ -20,7 +20,6 @@ services:
   app:
     build:
       context: ./app
-      dockerfile: Dockerfile
 
     environment:
       REDIS_HOST: redis
@@ -61,9 +60,6 @@ services:
     volumes:
       - redis_data:/data
 
-    expose:
-      - "6379"
-
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -72,6 +68,26 @@ services:
 
     networks:
       - backend
+
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.1
+
+    ports:
+      - "127.0.0.1:9090:9090"
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+
+    networks:
+      - frontend
 
     restart: unless-stopped
 
@@ -85,4 +101,5 @@ networks:
 
 volumes:
   redis_data:
+  prometheus_data:
 

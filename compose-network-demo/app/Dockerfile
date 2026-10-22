@@ -14,5 +14,6 @@ COPY app.py .
 EXPOSE 8000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", \
-     "--workers", "1", "--access-logfile", "-", "app:app"]
+     "--workers", "1", "--threads", "4", \
+     "--access-logfile", "-", "app:app"]
 
