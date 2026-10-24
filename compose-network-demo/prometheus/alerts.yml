@@ -1,0 +1,62 @@
+groups:
+  - name: sre-demo-alerts
+    rules:
+
+      - alert: FlaskAppDown
+        expr: up{job="flask-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Flask application is unavailable"
+          description: "Prometheus cannot scrape Flask /metrics"
+
+      - alert: RedisUnavailable
+        expr: app_redis_available{job="flask-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis dependency is unavailable"
+          description: "The latest Flask Redis healthcheck failed"
+
+      - alert: HighHttpErrorRate
+        expr: |
+          (
+            (
+              sum(
+                rate(
+                  app_http_requests_total{
+                    route!="/health",
+                    status=~"5.."
+                  }[5m]
+                )
+              ) or vector(0)
+            )
+            /
+            clamp_min(
+              sum(
+                rate(
+                  app_http_requests_total{
+                    route!="/health"
+                  }[5m]
+                )
+              ),
+              1e-9
+            )
+          ) > 0.05
+          and
+          sum(
+            rate(
+              app_http_requests_total{
+                route!="/health"
+              }[5m]
+            )
+          ) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP 5xx error rate is above 5%"
+          description: "User-facing requests are failing too frequently"
+

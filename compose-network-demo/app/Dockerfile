@@ -9,11 +9,10 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
+COPY app.py logging_config.py ./
 
 EXPOSE 8000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", \
      "--workers", "1", "--threads", "4", \
-     "--access-logfile", "-", "app:app"]
-
+     "app:app"]

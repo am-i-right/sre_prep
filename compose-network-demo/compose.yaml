@@ -24,6 +24,7 @@ services:
     environment:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      ENABLE_LAB_ENDPOINTS: "true"
 
     expose:
       - "8000"
@@ -37,7 +38,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"
       interval: 5s
       timeout: 3s
       retries: 10
@@ -79,6 +80,7 @@ services:
 
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
 
     command:
@@ -91,6 +93,25 @@ services:
 
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana:13.2.1
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+
+    depends_on:
+      - prometheus
+
+    networks:
+      - frontend
+
+    restart: unless-stopped
+
+
 networks:
   frontend:
     driver: bridge
@@ -102,4 +123,4 @@ networks:
 volumes:
   redis_data:
   prometheus_data:
-
+  grafana_data:
