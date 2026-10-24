@@ -1,35 +1,33 @@
 groups:
-  - name: sre-demo-alerts
+  - name: flask-sre-alerts
+    interval: 5s
+
     rules:
 
+      # 1. Prometheus cannot scrape Flask
       - alert: FlaskAppDown
         expr: up{job="flask-app"} == 0
-        for: 1m
+        for: 20s
+
         labels:
           severity: critical
+          service: flask-app
+
         annotations:
           summary: "Flask application is unavailable"
-          description: "Prometheus cannot scrape Flask /metrics"
+          description: "Prometheus cannot scrape app:8000/metrics"
 
-      - alert: RedisUnavailable
-        expr: app_redis_available{job="flask-app"} == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Redis dependency is unavailable"
-          description: "The latest Flask Redis healthcheck failed"
 
+      # 2. More than 10% of user requests return 5xx
       - alert: HighHttpErrorRate
         expr: |
           (
             (
               sum(
                 rate(
-                  app_http_requests_total{
-                    route!="/health",
-                    status=~"5.."
-                  }[5m]
+                  app_http_errors_total{
+                    route!~"/(health|ready)"
+                  }[1m]
                 )
               ) or vector(0)
             )
@@ -38,25 +36,62 @@ groups:
               sum(
                 rate(
                   app_http_requests_total{
-                    route!="/health"
-                  }[5m]
+                    route!~"/(health|ready)"
+                  }[1m]
                 )
               ),
               1e-9
             )
-          ) > 0.05
+          ) > 0.10
           and
           sum(
             rate(
               app_http_requests_total{
-                route!="/health"
-              }[5m]
+                route!~"/(health|ready)"
+              }[1m]
             )
-          ) > 0.1
-        for: 2m
+          ) > 0.2
+
+        for: 30s
+
         labels:
           severity: warning
+          service: flask-app
+
         annotations:
-          summary: "HTTP 5xx error rate is above 5%"
-          description: "User-facing requests are failing too frequently"
+          summary: "HTTP 5xx error rate is above 10%"
+          description: "User-facing HTTP requests are failing"
+
+
+      # 3. p95 latency exceeds 500 milliseconds
+      - alert: HighHttpLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (
+              rate(
+                app_http_request_duration_seconds_bucket{
+                  route!~"/(health|ready)"
+                }[1m]
+              )
+            )
+          ) > 0.5
+          and
+          sum(
+            rate(
+              app_http_request_duration_seconds_count{
+                route!~"/(health|ready)"
+              }[1m]
+            )
+          ) > 0.2
+
+        for: 30s
+
+        labels:
+          severity: warning
+          service: flask-app
+
+        annotations:
+          summary: "HTTP p95 latency exceeds 500 ms"
+          description: "The application is responding slowly"
 
