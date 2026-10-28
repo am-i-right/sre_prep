@@ -1,0 +1,95 @@
+
+---
+- name: Deploy SRE application to Ubuntu VM2
+  hosts: app_servers
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install Docker and Compose
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure Docker service is running
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create application directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - "{{ project_dir }}"
+        - "{{ project_dir }}/app"
+        - "{{ project_dir }}/nginx"
+
+    - name: Copy Compose and Python application files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../compose-network-demo/{{ item }}"
+        dest: "{{ project_dir }}/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - compose.yaml
+        - app/app.py
+        - app/logging_config.py
+        - app/requirements.txt
+        - app/Dockerfile
+      register: app_files
+
+    - name: Copy Nginx configuration
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../compose-network-demo/nginx/default.conf"
+        dest: "{{ project_dir }}/nginx/default.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Nginx container
+
+    - name: Start application services with Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_dir }}"
+        services: "{{ target_services }}"
+        state: present
+        build: "{{ 'always' if app_files.changed else 'policy' }}"
+        recreate: auto
+        wait: true
+        wait_timeout: 120
+
+    - name: Apply pending configuration handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify application readiness
+      ansible.builtin.uri:
+        url: "{{ healthcheck_url }}"
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: readiness
+      retries: 15
+      delay: 3
+      until: readiness.status == 200
+
+    - name: Report application readiness
+      ansible.builtin.debug:
+        msg: "Application is ready at {{ healthcheck_url }}"
+
+  handlers:
+    - name: Restart Nginx container
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_dir }}"
+        services:
+          - nginx
+        state: restarted
+
