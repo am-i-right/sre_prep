@@ -4,3 +4,9 @@
 *.pyc
 pytest-results.xml
 .env
+.terraform/
+terraform.tfstate
+terraform.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
