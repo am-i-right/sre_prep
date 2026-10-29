@@ -4,3 +4,4 @@
 *.pyc
 pytest-results.xml
 .env
+terraform.tfstate
